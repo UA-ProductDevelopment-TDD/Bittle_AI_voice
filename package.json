@@ -1,0 +1,1 @@
+{"name":"bittle-ai-commander","private":true,"type":"module","scripts":{"start":"node server.mjs","test":"node --test"}}
