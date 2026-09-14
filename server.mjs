@@ -3,9 +3,10 @@ import {readFile} from 'node:fs/promises';
 import {pathToFileURL} from 'node:url';
 import {tools,personality} from './dist/pito-tools.js';
 try{process.loadEnvFile();}catch(e){if(e.code!=='ENOENT')throw e;}
+const ASSET_VERSION='20260914a';
 export function createApp({apiKey=process.env.OPENAI_API_KEY??'',fetchImpl=fetch,model=process.env.OPENAI_REALTIME_MODEL??'gpt-realtime-2.1'}={}){
  let key=apiKey,starting=false;
- const files={'/':'index.html','/app.js':'app.js','/style.css':'style.css','/chat.js':'chat.js','/pito-tools.js':'pito-tools.js'};
+ const files={'/':'index.html','/app.js':'app.js','/animation.js':'animation.js','/animation-core.js':'animation-core.js','/style.css':'style.css','/chat.js':'chat.js','/realtime-browser.js':'realtime-browser.js','/pito-tools.js':'pito-tools.js','/sounds/bark.ogg':'sounds/bark.ogg','/sounds/howl.ogg':'sounds/howl.ogg','/sounds/growl.ogg':'sounds/growl.ogg','/sounds/sniff.ogg':'sounds/sniff.ogg'};
  return http.createServer(async(req,res)=>{
   const reply=(status,body,type='application/json')=>{res.writeHead(status,{'Content-Type':type,'Cache-Control':'no-store','X-Content-Type-Options':'nosniff'});res.end(type==='application/json'?JSON.stringify(body):body);};
   const host=req.headers.host;
@@ -26,7 +27,7 @@ export function createApp({apiKey=process.env.OPENAI_API_KEY??'',fetchImpl=fetch
     const sdp=await body(65536);if(!sdp.startsWith('v=0'))return reply(400,{error:'Ongeldige audioverbinding.'});
     starting=true;
     try{
-     const fd=new FormData();fd.set('sdp',sdp);fd.set('session',JSON.stringify({type:'realtime',model,instructions:personality,tools,tool_choice:'auto',output_modalities:['audio'],audio:{input:{transcription:{model:'gpt-4o-mini-transcribe',language:'nl'},turn_detection:{type:'semantic_vad',eagerness:'medium',create_response:true,interrupt_response:true}},output:{voice:'marin'}}}));
+     const fd=new FormData();fd.set('sdp',sdp);fd.set('session',JSON.stringify({type:'realtime',model,instructions:personality,tools,tool_choice:'auto',parallel_tool_calls:false,output_modalities:['audio'],audio:{input:{transcription:{model:'gpt-4o-mini-transcribe',language:'nl'},turn_detection:{type:'semantic_vad',eagerness:'medium',create_response:true,interrupt_response:true}},output:{voice:'cedar'}}}));
      const upstream=await fetchImpl('https://api.openai.com/v1/realtime/calls',{method:'POST',headers:{Authorization:'Bearer '+key},body:fd,signal:AbortSignal.timeout(30000)});
      if(!upstream.ok){await upstream.text();return reply(upstream.status===401?401:502,{error:upstream.status===401?'De API-sleutel is niet geldig.':upstream.status===429?'OpenAI-limiet of API-tegoed bereikt. Controleer je API-account.':'OpenAI kon het gesprek niet starten (HTTP '+upstream.status+'). Controleer modeltoegang en API-account.'});}
      return reply(200,await upstream.text(),'application/sdp');
@@ -34,7 +35,9 @@ export function createApp({apiKey=process.env.OPENAI_API_KEY??'',fetchImpl=fetch
    }
    if(req.method!=='GET')return reply(405,{error:'Methode niet toegestaan.'});
    const file=files[path];if(!file)return reply(404,{error:'Niet gevonden'});
-   reply(200,await readFile(new URL('./dist/'+file,import.meta.url)),file.endsWith('.js')?'text/javascript':file.endsWith('.css')?'text/css':'text/html; charset=utf-8');
+   let content=await readFile(new URL('./dist/'+file,import.meta.url));
+   if(file==='index.html')content=String(content).replace(/(href|src)="\/(style\.css|app\.js|animation\.js|chat\.js)"/g,'$1="/$2?v='+ASSET_VERSION+'"');
+   reply(200,content,file.endsWith('.js')?'text/javascript':file.endsWith('.css')?'text/css':file.endsWith('.ogg')?'audio/ogg':'text/html; charset=utf-8');
   }catch{reply(500,{error:'Aanvraag mislukt. Controleer de invoer of internetverbinding.'});}
  });
 }
